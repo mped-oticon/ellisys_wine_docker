@@ -1,8 +1,8 @@
 #!/bin/bash
-IMAGE_STEP0="debian_wine:stretch"                   # Layered
-IMAGE_STEP1="debian_wine_dotnet461:stretch"         # Layered
-IMAGE_STEP2="debian_wine_dotnet461_ellisys:stretch" # Layered
-IMAGE_STEP3="ellisys:stretch"                       # Squashed
+IMAGE_STEP0="debian_wine:bullseye"                   # Layered
+IMAGE_STEP1="debian_wine_dotnet461:bullseye"         # Layered
+IMAGE_STEP2="debian_wine_dotnet461_ellisys:bullseye" # Layered
+IMAGE_STEP3="ellisys:bullseye"                       # Squashed
 
 export ELLISYS_WINE_DIR="$(readlink -f $(dirname ${BASH_SOURCE[0]}))"
 
@@ -107,7 +107,7 @@ function build_step2 {
 
 # Optional. Slim down: Remove unessecary wine-dependencies, collapse duplicate files installed by .NET
 # Approx 1.08 GB (FROM debian:testing)
-# Approx 2.17 GB (FROM debian:stretch). TODO: Reduce further
+# Approx 2.17 GB (FROM debian:bullseye). TODO: Reduce further
 function build_step3 {
     sudo_docker_run "${IMAGE_STEP2}" /assets/minimize.sh
     sudo docker commit $(cat "${CONTAINER_ID_FILE}") "${IMAGE_STEP3}.layered"

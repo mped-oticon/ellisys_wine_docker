@@ -1,4 +1,4 @@
-FROM debian:stretch
+FROM debian:bullseye
 
 # Install wine
 RUN dpkg --add-architecture i386
