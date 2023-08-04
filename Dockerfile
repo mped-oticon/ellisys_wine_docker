@@ -1,9 +1,10 @@
 FROM debian:bullseye
-
+ARG var_USERID=1000
+ENV USERID=${var_USERID}
 # Install wine
 RUN dpkg --add-architecture i386
 RUN apt-get update
-RUN apt-get install -y cabextract gnupg2
+RUN apt-get install -y cabextract gnupg2 unzip
 RUN apt-get install -y wget software-properties-common
 RUN wget -q -O - http://dl.winehq.org/wine-builds/winehq.key | apt-key add -
 RUN apt-add-repository http://dl.winehq.org/wine-builds/debian/
@@ -20,7 +21,8 @@ RUN mkdir -p /opt && chmod a+rwx /opt
 #####
 
 # Don't trust Windows software wih root-creds: Create an unprivileged user to run WINE stuff
-RUN useradd --uid 65000 --create-home --shell /bin/bash wineuser
+# Change the UID here to your userid `id --user` to avoid permission troubles with docker.
+RUN useradd -l --uid $USERID --create-home --shell /bin/bash wineuser
 
 # WINE will complain if the user doesn't own /opt/wineprefix.
 # Currently 'wineuser' is the owner, but we propagate user-id through Docker.
@@ -37,5 +39,5 @@ USER wineuser
 WORKDIR /tmp
 RUN mkdir -p /opt/wineprefix && chmod a+rwx /opt/wineprefix
 
-# Tell docker to use this as entrypoint for 'docker run', rather than "/bin/sh -c"
+# Tell docker to use this as the entry point for 'docker run', rather than "/bin/sh -c"
 ENTRYPOINT ["/assets/entry.sh"]

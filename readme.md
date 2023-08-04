@@ -31,5 +31,15 @@ Basically you call the script with a subcommand, e.g.:
 
     ./wine_docker.sh ellisys
     ./wine_docker.sh ellisys dump.btt
+    ./wine_docker.sh ebq_viewer dump.thd
     ./wine_docker.sh interactive   # default behavior. Gives you a shell inside
 
+# Troubleshooting
+
+* Ellysis crashes when you try to open / save file </br>
+    Change the docker user id in the docker image and recompile it.
+
+* ebq_viewer crashes </br>
+    Run it with a file first. After that the version without a file will work too.
+    installing d3dx9 in addition to d3dcompiler_47 might fix it as well, but
+    it's hard to reproduce this issue.
