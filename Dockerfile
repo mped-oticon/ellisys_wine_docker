@@ -1,36 +1,41 @@
-FROM debian:bullseye
+#syntax=docker/dockerfile:1.4
+
+ARG UBUNTU_VERSION=18.04
+ARG WINE_MONO_VERSION="7.4.0"
+FROM ubuntu:${UBUNTU_VERSION}
+
 ARG var_USERID=1000
 ENV USERID=${var_USERID}
-# Install wine
-RUN dpkg --add-architecture i386
-RUN apt-get update
-RUN apt-get install -y cabextract gnupg2 unzip
-RUN apt-get install -y wget software-properties-common
-RUN wget -q -O - http://dl.winehq.org/wine-builds/winehq.key | apt-key add -
-RUN apt-add-repository http://dl.winehq.org/wine-builds/debian/
-RUN apt-get update
-RUN apt-get install -y --install-recommends winehq-stable
 
-# Install winetricks
-RUN wget --no-check-certificate -q -O /usr/local/bin/winetricks 'https://raw.githubusercontent.com/Winetricks/winetricks/master/src/winetricks'
-RUN chmod +x /usr/local/bin/winetricks
+# Install some tools required for creating the image
+RUN apt-get update \
+	&& apt-get install -y --no-install-recommends \
+    wget \
+	curl \
+	unzip \
+	ca-certificates
+
+# enable 32-bit architecture support
+RUN dpkg --add-architecture i386 \
+    && apt-get update \
+    && apt-get install -y \
+    wine64 \
+    wine32
+
+# Use the latest version of winetricks
+RUN curl -SL 'https://raw.githubusercontent.com/Winetricks/winetricks/master/src/winetricks' -o /usr/local/bin/winetricks \
+	&& chmod +x /usr/local/bin/winetricks
+
+# Get latest version of mono for wine
+RUN mkdir -p /usr/share/wine/mono \
+	&& curl -SL 'http://sourceforge.net/projects/wine/files/Wine%20Mono/${WINE_MONO_VERSION}/wine-mono-${WINE_MONO_VERSION}.msi/download' -o /usr/share/wine/mono/wine-mono-${WINE_MONO_VERSION}.msi \
+	&& chmod +x /usr/share/wine/mono/wine-mono-${WINE_MONO_VERSION}.msi
 
 # Let us be able to create a shared-wineprefix and /opt/ellisys.sh, later on
 RUN mkdir -p /opt && chmod a+rwx /opt
 
-#####
-
-# Don't trust Windows software wih root-creds: Create an unprivileged user to run WINE stuff
-# Change the UID here to your userid `id --user` to avoid permission troubles with docker.
+# Wine really doesn't like to be run as root, so let's use a non-root user
 RUN useradd -l --uid $USERID --create-home --shell /bin/bash wineuser
-
-# WINE will complain if the user doesn't own /opt/wineprefix.
-# Currently 'wineuser' is the owner, but we propagate user-id through Docker.
-# So we don't know upfront who the user is, but WINE can be appeased by chowning the prefix root folder only.
-# This ownership change is done once by entry.sh upon every docker-run.
-# But in Linux, only {root, owner} may change ownership.
-# 'myself' can't change ownership of /opt/wineprefix, without being wineuser or root.
-# So we make an escape-hatch, that entry.sh removes after use.
 RUN cp /bin/chown          /tmp/chown_suid
 RUN chmod a+rws            /tmp/chown_suid
 
@@ -39,5 +44,5 @@ USER wineuser
 WORKDIR /tmp
 RUN mkdir -p /opt/wineprefix && chmod a+rwx /opt/wineprefix
 
-# Tell docker to use this as the entry point for 'docker run', rather than "/bin/sh -c"
+# Use entry.sh as the entry point for 'docker run', rather than '/bin/sh -c'
 ENTRYPOINT ["/assets/entry.sh"]

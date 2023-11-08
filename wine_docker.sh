@@ -1,9 +1,9 @@
 #!/bin/bash
-IMAGE_STEP0="debian_wine:bullseye"                         # Layered
-IMAGE_STEP1="debian_wine_dotnet48:bullseye"                # Layered
-IMAGE_STEP2="debian_wine_dotnet48_tricks:bullseye"         # Layered
-IMAGE_STEP3="debian_wine_dotnet48_tricks_ellisys:bullseye" # Layered
-IMAGE_STEP4="ellisys:bullseye"                             # Squashed
+IMAGE_STEP0="ubuntu_wine:18_04"                         # Layered
+IMAGE_STEP1="ubuntu_wine_dotnet48:18_04"                # Layered
+IMAGE_STEP2="ubuntu_wine_dotnet48_tricks:18_04"         # Layered
+IMAGE_STEP3="ubuntu_wine_dotnet48_tricks_ellisys:18_04" # Layered
+IMAGE_STEP4="ellisys:18_04"                             # Squashed
 
 export ELLISYS_WINE_DIR="$(readlink -f $(dirname ${BASH_SOURCE[0]}))"
 
@@ -87,7 +87,7 @@ function auto_version {
 }
 
 
-# Install wine into debian
+# Install wine on Ubuntu
 # Approx 1.72 GB
 function build_step0 {
     cat Dockerfile | sudo docker build -t "${IMAGE_STEP0}" --build-arg var_USERID=$(id --user) -
@@ -106,12 +106,20 @@ function build_step2 {
     sudo docker commit $(cat "${CONTAINER_ID_FILE}") "${IMAGE_STEP2}"
 }
 
+# # Fetch+Install Ellisys, automatically
+# # Approx 3.22 GB
+# function build_step3 {
+#     sudo_docker_run "${IMAGE_STEP2}" /assets/install_ellisys.sh
+#     sudo docker commit $(cat "${CONTAINER_ID_FILE}") "${IMAGE_STEP3}"
+#     sudo docker commit $(cat "${CONTAINER_ID_FILE}") "${IMAGE_STEP3}-$(auto_version)"
+# }
+
 # Fetch+Install Ellisys, automatically
 # Approx 3.22 GB
 function build_step3 {
-    sudo_docker_run "${IMAGE_STEP2}" /assets/install_ellisys.sh
+    sudo_docker_run "${IMAGE_STEP2}" /assets/install_ellisys_qualifier.sh
     sudo docker commit $(cat "${CONTAINER_ID_FILE}") "${IMAGE_STEP3}"
-    sudo docker commit $(cat "${CONTAINER_ID_FILE}") "${IMAGE_STEP3}-$(auto_version)"
+    # sudo docker commit $(cat "${CONTAINER_ID_FILE}") "${IMAGE_STEP3}-$(auto_version)"
 }
 
 # Optional. Slim down: Remove unnecessary wine-dependencies, collapse duplicate files installed by .NET
@@ -158,5 +166,17 @@ function ebq_viewer {
         sudo_docker_run -u "$myself" -e WINEDEBUG=fixme-all --rm "${IMAGE_STEP3}" /opt/ebq_viewer.sh "${file_dos}" $@
     }
 }
+
+function ebq_qualifier {
+    local file_unix=${1:+$(realpath "$1")}  # optional. File to load
+    local file_dos="${file_unix:+H:}${file_unix}"  # no need to flip slashes for wine
+    shift
+
+    {
+        local myself="$(id --user):$(id --group)"
+        sudo_docker_run -u "$myself" -e WINEDEBUG=fixme-all --rm "${IMAGE_STEP3}" /opt/ebq_qualifier.sh "${file_dos}" $@
+    }
+}
+
 
 ${@:-interactive}
