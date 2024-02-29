@@ -1,43 +1,73 @@
-FROM debian:bullseye
+#syntax=docker/dockerfile:1.4
+
+ARG UBUNTU_VERSION=18.04
+FROM ubuntu:${UBUNTU_VERSION} as ubuntu-base
+
 ARG var_USERID=1000
-ENV USERID=${var_USERID}
-# Install wine
-RUN dpkg --add-architecture i386
-RUN apt-get update
-RUN apt-get install -y cabextract gnupg2 unzip
-RUN apt-get install -y wget software-properties-common
-RUN wget -q -O - http://dl.winehq.org/wine-builds/winehq.key | apt-key add -
-RUN apt-add-repository http://dl.winehq.org/wine-builds/debian/
-RUN apt-get update
-RUN apt-get install -y --install-recommends winehq-stable
+ENV USERID {var_USERID}
 
-# Install winetricks
-RUN wget --no-check-certificate -q -O /usr/local/bin/winetricks 'https://raw.githubusercontent.com/Winetricks/winetricks/master/src/winetricks'
-RUN chmod +x /usr/local/bin/winetricks
+####################################
 
-# Let us be able to create a shared-wineprefix and /opt/ellisys.sh, later on
-RUN mkdir -p /opt && chmod a+rwx /opt
+# https://github.com/suchja/x11client/blob/master/Dockerfile
 
-#####
+RUN addgroup --system wineuser \
+    && adduser \
+	--home /home/wineuser \
+	--disabled-password \
+	--shell /bin/bash \
+	--gecos "user for running an xclient application" \
+	--ingroup wineuser \
+	--quiet \
+	wineuser
 
-# Don't trust Windows software wih root-creds: Create an unprivileged user to run WINE stuff
-# Change the UID here to your userid `id --user` to avoid permission troubles with docker.
-RUN useradd -l --uid $USERID --create-home --shell /bin/bash wineuser
+# Install packages required for connecting against X Server
+# Xvfb provides a window server that emulates both the display and input devices.
+RUN apt-get update \
+	&& apt-get install -y --no-install-recommends xvfb xauth
 
-# WINE will complain if the user doesn't own /opt/wineprefix.
-# Currently 'wineuser' is the owner, but we propagate user-id through Docker.
-# So we don't know upfront who the user is, but WINE can be appeased by chowning the prefix root folder only.
-# This ownership change is done once by entry.sh upon every docker-run.
-# But in Linux, only {root, owner} may change ownership.
-# 'myself' can't change ownership of /opt/wineprefix, without being wineuser or root.
-# So we make an escape-hatch, that entry.sh removes after use.
-RUN cp /bin/chown          /tmp/chown_suid
-RUN chmod a+rws            /tmp/chown_suid
+# ================================ WINE =================================
+# https://github.com/suchja/wine/blob/master/Dockerfile
+FROM ubuntu-base as wine-base
 
-# Drop out of root-shell
+ENV WINE_MONO_VERSION 4.7.3
+
+# Install some tools required for creating the image
+RUN apt-get update && apt-get install -y --no-install-recommends \
+	curl \
+	unzip \
+	ca-certificates
+
+# WINE
+RUN dpkg --add-architecture i386 \
+	&& apt-get update \
+	&& apt-get install -y --no-install-recommends wine32
+
+# WINETRICKS
+RUN curl -SL 'https://raw.githubusercontent.com/Winetricks/winetricks/master/src/winetricks' -o /usr/local/bin/winetricks \
+		&& chmod +x /usr/local/bin/winetricks
+
+# WINE MONO
+RUN mkdir -p /usr/share/wine/mono \
+	&& curl -SL 'http://sourceforge.net/projects/wine/files/Wine%20Mono/$WINE_MONO_VERSION/wine-mono-$WINE_MONO_VERSION.msi/download' -o /usr/share/wine/mono/wine-mono-$WINE_MONO_VERSION.msi \
+	&& chmod +x /usr/share/wine/mono/wine-mono-$WINE_MONO_VERSION.msi
+
+# Wine really doesn't like to be run as root, so let's use a non-root user
 USER wineuser
-WORKDIR /tmp
-RUN mkdir -p /opt/wineprefix && chmod a+rwx /opt/wineprefix
+ENV HOME /home/wineuser
+ENV WINEPREFIX /home/wineuser/.wine
+ENV WINEARCH win32
+ENV WINEDEBUG=fixme-all
 
-# Tell docker to use this as the entry point for 'docker run', rather than "/bin/sh -c"
-ENTRYPOINT ["/assets/entry.sh"]
+WORKDIR /home/wineuser
+# RUN echo "alias winegui='wine explorer /desktop=DockerDesktop,1024x768'" > ~/.bash_aliases
+
+# ================================ EBQ Qualifier =================================
+FROM wine-base as EBQ
+
+ARG EBQ_EXE=EllisysBluetoothQualifierInstaller-2023-1.8710.exe
+ARG EBQ_PATH=/assets/tmp/${EBQ_EXE}
+ARG EBQ_INSTALL_FOLDER="C:\Ellisys"
+
+ADD ${EBQ_PATH} .
+
+ENTRYPOINT [ "wine", "${EBQ_EXE}.exe"]

@@ -90,5 +90,3 @@ EOF
 chmod +x "/opt/ebq_viewer.sh"
 
 chmod -R a+rxw "$WINEPREFIX"  # Ensure everybody can access newly installed stuff
-
-
